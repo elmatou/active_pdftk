@@ -1,30 +1,30 @@
 require 'spec_helper'
 #TODO implement tests with a full pdf file.
-#
+#Add pages, Bookmarks, page_labels
 
-describe PdftkForms::DataInfo do
+describe PdftkForms::Metadata do
     before(:all) do
       @pdftk = PdftkForms::Wrapper.new
     end
   context "new" do
     before(:all) do
       @temp_file = @pdftk.dump_data(path_to_pdf('fields.pdf'))
-      @data_info = PdftkForms::DataInfo.new(@temp_file)
+      @data_info = PdftkForms::Metadata.new(@temp_file)
     end
 
-    it "should create a PdftkForms::DataInfo object" do
-      @data_info.should be_kind_of(PdftkForms::DataInfo)
+    it "should create a PdftkForms::Metadata object" do
+      @data_info.should be_kind_of(PdftkForms::Metadata)
     end
 
     it "should retrieve Infos" do
       @data_info.infos.each do |info|
-        info.should be_kind_of(PdftkForms::DataInfo::Info)
+        info.should be_kind_of(PdftkForms::Metadata::Info)
         info.is_valid?.should be_true
       end
       @data_info.infos.count.should == 5
     end
 
-    it "should retrieve number of pages" do
+    it "should retrieve the number of pages" do
       @data_info.pages.should == 1
     end
 
@@ -34,7 +34,7 @@ describe PdftkForms::DataInfo do
 
     it "should retrieve bookmarks" do
       @data_info.bookmarks.each do |bookmark|
-        bookmark.should be_kind_of(PdftkForms::DataInfo::Bookmark)
+        bookmark.should be_kind_of(PdftkForms::Metadata::Bookmark)
         bookmark.is_valid?.should be_true
       end
       @data_info.bookmarks.count.should == 0
@@ -42,21 +42,21 @@ describe PdftkForms::DataInfo do
 
     it "should retrieve page labels" do
       @data_info.page_labels.each do |page_label|
-        page_label.should be_kind_of(PdftkForms::DataInfo::PageLabel)
+        page_label.should be_kind_of(PdftkForms::Metadata::PageLabel)
         page_label.is_valid?.should be_true
       end
       @data_info.page_labels.count.should == 0
     end
 
     it "should import the file" do
-      PdftkForms::DataInfo.import(path_to_pdf('fields.pdf')).should be_kind_of(PdftkForms::DataInfo)
+      PdftkForms::Metadata.import(path_to_pdf('fields.pdf')).should be_kind_of(PdftkForms::Metadata)
     end
 
   end
   context "edit" do
     before do
       @string_io = @pdftk.dump_data(path_to_pdf('fields.pdf'))
-      @data_info = PdftkForms::DataInfo.new(@string_io)
+      @data_info = PdftkForms::Metadata.new(@string_io)
     end
 
     it "should prepare a formatted string." do
@@ -65,25 +65,33 @@ describe PdftkForms::DataInfo do
 
     it "should update things" do
       @data_info.infos.first.value = "Updated value"
-      @data_info.bookmarks.first.title = "Updated Title"
+#      @data_info.bookmarks.first.title = "Updated Title"
 
-      @updated_info = PdftkForms::DataInfo.new(@data_info.to_s)
+      @updated_info = PdftkForms::Metadata.new(@data_info.to_s)
       
       @updated_info.infos.first.value.should == "Updated value"
-      @updated_info.bookmarks.first.title.should = "Updated Title"
+#      @updated_info.bookmarks.first.title.should = "Updated Title"
     end
+
+    it "should add some things" do
+      @data_info.add_info("Modifier", "ActivePdfTK")
+      @data_info.add_bookmark("First Page !", 1, 1)
+      @data_info.add_page_label(1, 1, "LowercaseRomanNumerals")
+      puts @data_info.to_s
+    end
+
   end
 
   context "save" do
     before do
-      @data_info = PdftkForms::DataInfo.import(path_to_pdf('fields.pdf'))
+      @data_info = PdftkForms::Metadata.import(path_to_pdf('fields.pdf'))
     end
 
-    it "should update the infos" do
-      @data_info.infos.first.value = "Updated value"
-      @data_info.save
-      @data_info = PdftkForms::DataInfo.import(path_to_pdf('fields.pdf'))
-    end
+#    it "should update the infos" do
+#      @data_info.infos.first.value = "Updated value"
+#      @data_info.save
+#      @data_info = PdftkForms::Metadata.import(path_to_pdf('fields.pdf'))
+#    end
   end
 
 end

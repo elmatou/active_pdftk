@@ -1,6 +1,6 @@
 module PdftkForms
   # Represents Data infos on a particular PDF
-  class DataInfo
+  class Metadata
     attr_reader :infos, :bookmarks, :page_labels, :pdf_ids, :pages
     
 #  InfoKey: Creator
@@ -42,7 +42,6 @@ module PdftkForms
 
     def self.import(template, wrapper_statements = {})
       @pdftk = Wrapper.new(wrapper_statements)
-      @template = template
       new(@pdftk.dump_data(template))
     end
 
@@ -99,6 +98,11 @@ module PdftkForms
       @page_labels.collect { |i| i.to_s }.join('')
     end
 
+    def save(wrapper_statements = {})
+      @pdftk = Wrapper.new(wrapper_statements)
+      @pdftk.update_info(@template, StringIO.new(to_s))
+    end
+
     # Please provide a camelized string like "DataInfo" for +key+ (and not "data_info")
     #
     def add_info(key, value)
@@ -106,15 +110,14 @@ module PdftkForms
     end
 
     def rm_info(key)
-#      @infos.delete(key.to_s)
+      @infos.delete_if {|x| x.key key.to_s}
     end
 
     def add_bookmark(title, level, page, before = nil)
-      @infos << Bookmark.new(title, level, page)
+      @bookmarks << Bookmark.new(title, level, page)
     end
 
     def rm_bookmark(title, level, page)
-
     end
 
     def add_page_label(new_index, start, num_style)
@@ -122,7 +125,6 @@ module PdftkForms
     end
 
     def rm_page_label(new_index, start, num_style)
-
     end
 
     class Info
