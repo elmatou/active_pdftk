@@ -47,11 +47,6 @@ describe PdftkForms::Metadata do
       end
       @data_info.page_labels.count.should == 0
     end
-
-    it "should import the file" do
-      PdftkForms::Metadata.import(path_to_pdf('fields.pdf')).should be_kind_of(PdftkForms::Metadata)
-    end
-
   end
   context "edit" do
     before do
@@ -77,21 +72,8 @@ describe PdftkForms::Metadata do
       @data_info.add_info("Modifier", "ActivePdfTK")
       @data_info.add_bookmark("First Page !", 1, 1)
       @data_info.add_page_label(1, 1, "LowercaseRomanNumerals")
-      puts @data_info.to_s
+#      puts @data_info.to_s
     end
 
   end
-
-  context "save" do
-    before do
-      @data_info = PdftkForms::Metadata.import(path_to_pdf('fields.pdf'))
-    end
-
-#    it "should update the infos" do
-#      @data_info.infos.first.value = "Updated value"
-#      @data_info.save
-#      @data_info = PdftkForms::Metadata.import(path_to_pdf('fields.pdf'))
-#    end
-  end
-
 end
