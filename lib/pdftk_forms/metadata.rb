@@ -5,23 +5,37 @@ module PdftkForms
     class NotValid < StandardError
     end
 
-    attr_reader :infos, :bookmarks, :page_labels, :pdf_ids, :pages
+    class << self
+      def build(template, options = {})
+        @wrapper = Wrapper.new(options)
+        new(@wrapper.dump_data(template), @wrapper)
+      end
+    end
+
+#    For now only infos are editable, others metadata are 'readonly' :-(
+    attr_accessor :infos
+    attr_reader :pdf_ids, :pages, :bookmarks, :page_labels
 
 #    See metadata_content.rb to see types of data handled by this class
+    def initialize(string, wrapper = nil)
+      # set a intern wrapper instance if externaly provided
+      @wrapper = wrapper
 
-    def initialize(string)
+      # assert the input is a rewinded StringIO
+      string = StringIO.new(string) if string.is_a? String
+      string.rewind
+
       @infos, @bookmarks, @page_labels, @pdf_ids = [], [], [], []
       info = Info.new
       bookmark = Bookmark.new
       page_label = PageLabel.new
       
-      string = StringIO.new(string) if string.is_a? String
-      string.rewind
-      raw_string = string.each do |line|
+
+      string.each do |line|
         line.scan(/^(\w+): (.*)$/) do |key, value|
           case key
             when /^PdfID/ then
-              @pdf_ids.push value.to_i
+              @pdf_ids.push value
 
             when /^NumberOfPages/ then
               @pages = value.to_i
@@ -64,35 +78,47 @@ module PdftkForms
       @page_labels.collect { |i| i.to_s }.join('')
     end
 
-#    def save(validation = false)
-#      @pdftk.update_info(@template, StringIO.new(to_s)) if @pdftk
-#    end
+    def save
+      @wrapper.update_info(@template, StringIO.new(to_s)) if @wrapper
+    end
 
 #    Please provide a camelized string like "DataInfo" for +key+ (and not "data_info")
 #    Or we could use the Rails helper (but I don't want to rewrite it...)
-    def add_info(key, value)
-      @infos << Info.new(key, value)
+
+    def info_get(key)
+      @infos.detect {|f| f.key == key.to_s}
+    end
+    
+    def info_set(key, value)
+      f = info_get(key)
+      if f.nil?
+        @infos << Info.new(key, value)
+      else
+        f.value = value
+      end
     end
 
-    def rm_info(key)
-      @infos.delete_if {|x| x.key key.to_s}
+    def info_delete(key)
+      @infos.delete_if {|x| x.key == key.to_s}
     end
 
-    def add_bookmark(title, level, page, before = nil)
-      @bookmarks << Bookmark.new(title, level, page)
-    end
 
-    def rm_bookmark(title = nil, level = nil, page = nil)
-      # lookup the bookmark by one or more of his attributes and remove it.
-    end
 
-    # check in PDF reference if a page can have more than one page label ?
-    def add_page_label(new_index, start, num_style)
-      @page_labels << PageLabel.new(new_index, start, num_style)
-    end
+#    def add_bookmark(title, level, page, before = nil)
+#      @bookmarks << Bookmark.new(title, level, page)
+#    end
+#
+#    def rm_bookmark(title = nil, level = nil, page = nil)
+#      # lookup the bookmark by one or more of his attributes and remove it.
+#    end
 
-    def rm_page_label(from, to = nil)
-      # lookup the page label by a given page and remove it.
-    end
+#  #TODO  check in PDF reference if a page can have more than one page label ?
+#    def add_page_label(new_index, start, num_style)
+#      @page_labels << PageLabel.new(new_index, start, num_style)
+#    end
+#
+#    def rm_page_label(from, to = nil)
+# #TODO     lookup the page label by a given page and remove it.
+#    end
   end
 end

@@ -1,6 +1,4 @@
 require 'spec_helper'
-#TODO implement tests with a full pdf file.
-#Add pages, Bookmarks, page_labels
 
 describe PdftkForms::Metadata do
     before(:all) do
@@ -8,7 +6,7 @@ describe PdftkForms::Metadata do
     end
   context "new" do
     before(:all) do
-      @temp_file = @pdftk.dump_data(path_to_pdf('fields.pdf'))
+      @temp_file = @pdftk.dump_data(path_to_pdf('metadata.pdf'))
       @data_info = PdftkForms::Metadata.new(@temp_file)
     end
 
@@ -17,19 +15,21 @@ describe PdftkForms::Metadata do
     end
 
     it "should retrieve Infos" do
+      @default_infos = {"Creator" => "Scribus 1.3.3.13svn", "Producer" => "ActivePdftk", "Author" => "Elmatou", "Title" => "Metadata Test file", "Keywords" => "pdftk metadata bookmarks pagelabel", "CreationDate" => "D:20110615000000", "ModDate" => "D:20110615000001"}
       @data_info.infos.each do |info|
         info.should be_kind_of(PdftkForms::Metadata::Info)
         info.is_valid?.should be_true
+        info.value.should == @default_infos[info.key]
       end
-      @data_info.infos.count.should == 5
+      @data_info.infos.count.should == 7
     end
 
     it "should retrieve the number of pages" do
-      @data_info.pages.should == 1
+      @data_info.pages.should == 4
     end
 
     it "should retrieve ids" do
-      @data_info.pdf_ids.should == ["6cac1734f454cee9944c0531b475f11", "f3adcb7a648b4a1eb3a96021add55cc2"]
+      @data_info.pdf_ids.should == ["62819f2d3497b8ee3e31889dfd4e7ae5", "62819f2d3497b8ee3e31889dfd4e7ae5"]
     end
 
     it "should retrieve bookmarks" do
@@ -48,32 +48,74 @@ describe PdftkForms::Metadata do
       @data_info.page_labels.count.should == 0
     end
   end
-  context "edit" do
+  
+  context "read" do
     before do
-      @string_io = @pdftk.dump_data(path_to_pdf('fields.pdf'))
+      @string_io = @pdftk.dump_data(path_to_pdf('metadata.pdf'))
       @data_info = PdftkForms::Metadata.new(@string_io)
     end
 
     it "should prepare a formatted string." do
       @data_info.to_s.should == @string_io.string
     end
-
-    it "should update things" do
-      @data_info.infos.first.value = "Updated value"
-#      @data_info.bookmarks.first.title = "Updated Title"
-
-      @updated_info = PdftkForms::Metadata.new(@data_info.to_s)
-      
-      @updated_info.infos.first.value.should == "Updated value"
-#      @updated_info.bookmarks.first.title.should = "Updated Title"
-    end
-
-    it "should add some things" do
-      @data_info.add_info("Modifier", "ActivePdfTK")
-      @data_info.add_bookmark("First Page !", 1, 1)
-      @data_info.add_page_label(1, 1, "LowercaseRomanNumerals")
-#      puts @data_info.to_s
-    end
-
   end
+
+  context "edit informations" do
+    before do
+      @data_info = PdftkForms::Metadata.new(@pdftk.dump_data(path_to_pdf('metadata.pdf')))
+
+      @data_info.info_set("Producer", "Testing")
+      @data_info.info_set("Author", "SuperTest")
+      @data_info.info_set("ModDate", "D:20110615111111")
+      @data_info.info_set("CreationDate", "D:20110615222222")
+      @data_info.info_delete("Title")
+      @data_info.info_set("Keywords", "Metadata keywords")
+    end
+
+    it "should set/add/delete some" do
+      @updated_info = PdftkForms::Metadata.new(@data_info.to_s)
+
+      @updated_info.info_get("Producer").value.should == "Testing"
+      @updated_info.info_get("Author").value.should == "SuperTest"
+      @updated_info.info_get("ModDate").value.should == "D:20110615111111"
+      @updated_info.info_get("CreationDate").value.should == "D:20110615222222"
+      @updated_info.info_get("Title").should == nil
+      @updated_info.info_get("Keywords").value.should == "Metadata keywords"
+    end
+
+    it "should update them in the pdf" do
+      @pdftk.update_info(path_to_pdf('metadata.pdf'), StringIO.new(@data_info.to_s), :output => @new_pdf = StringIO.new)
+      @new_pdf.rewind
+      @updated_info = PdftkForms::Metadata.new(@pdftk.dump_data(@new_pdf))
+
+      @updated_info.info_get("Producer").value.should == "Testing"
+      @updated_info.info_get("Author").value.should == "SuperTest"
+      @updated_info.info_get("ModDate").value.should == "D:20110615111111"
+      @updated_info.info_get("CreationDate").value.should == "D:20110615222222"
+      @updated_info.info_get("Title").should == nil
+      @updated_info.info_get("Keywords").value.should == "Metadata keywords"
+    end
+  end
+
+#  context "prepare specs" do
+#    before do
+#      @data_info = PdftkForms::Metadata.new(@pdftk.dump_data(path_to_pdf('metadata.pdf')))
+#    end
+#
+#    it "should prepare my test file" do
+#      @data_info.info_set("Producer", "ActivePdftk")
+#      @data_info.info_set("Author", "Elmatou")
+#      @data_info.info_set("Title", "Metadata Test file")
+#      @data_info.info_set("ModDate", "D:20110615000001")
+#      @data_info.info_set("CreationDate", "D:20110615000000")
+#      @data_info.info_set("Keywords", "pdftk metadata bookmarks pagelabel")
+#
+#      @data_info.pdf_ids = ["1cd5c16169d6593c78aa499b67d2d51e", "12819f2d3497b8ee3e31889dfd4e7ae5"]
+#      @data_info.add_bookmark("First Page !", 1, 1)
+#      @data_info.add_bookmark("Last Page !", 2, 4)
+#      @data_info.add_page_label(1, 1, "LowercaseRomanNumerals")
+#
+#      @pdftk.update_info(path_to_pdf('metadata.pdf'), StringIO.new(@data_info.to_s), :output => path_to_pdf('metadata2.pdf'))
+#    end
+#  end
 end
