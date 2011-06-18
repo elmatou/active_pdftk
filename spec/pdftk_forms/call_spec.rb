@@ -4,7 +4,9 @@ require 'tempfile'
 describe PdftkForms::Call do
   context "#new" do
     before do
-      @pdftk = PdftkForms::Call.new
+      options = {}
+      options[:path] = ENV['path'] unless ENV['path'].nil?
+      @pdftk = PdftkForms::Call.new(options)
     end
     it "should set the path (not nil)" do
       @pdftk.default_statements[:path].should_not be_nil
@@ -33,26 +35,22 @@ describe PdftkForms::Call do
     end
 
     it "should store default options" do
+      path =  PdftkForms::Call.new.locate_pdftk
       @pdftk = PdftkForms::Call.new(:input => 'test.pdf', :options => {:flatten => true})
-      @pdftk.default_statements.should == {:input => 'test.pdf', :options => {:flatten => true}, :path=>"/usr/bin/pdftk"}
+      @pdftk.default_statements.should == {:input => 'test.pdf', :options => {:flatten => true}, :path => path}
     end
   end
 
   context "#set_cmd" do
-      # Because with Ruby 1.8 Hashes are unordered, and options in cli are unordered too,
-      # two command lines could seems different but have the same behaviour.
-      # With Ruby 1.9 command line should always be identical.
-      # In order to specs this we compare a sorted array of characters composing the command line
-      # it is not bulletproof but command line anagrams are very unlikely.
-      # Anybody with a better solution should make a proposal.
-
     context "prepare command" do
       before do
         @pdftk = PdftkForms::Call.new
       end
+
       it "should convert input" do
         @pdftk.set_cmd(:input => 'a.pdf').should == "a.pdf"
-#        @pdftk.set_cmd(:input => {'a.pdf' => 'foo', 'b.pdf' => 'bar', 'c.pdf' => nil}).split('').sort.should == "B=c.pdf C=a.pdf D=b.pdf input_pw C=foo D=bar".split('').sort
+        inputs = {'a.pdf' => 'foo', 'b.pdf' => 'bar', 'c.pdf' => nil}
+        reconstruct_inputs(@pdftk.set_cmd(:input => inputs)).should == inputs
         @pdftk.set_cmd(:input => File.new(path_to_pdf('fields.pdf'))).should == "-"
         @pdftk.set_cmd(:input => Tempfile.new('specs')).should == "-"
         @pdftk.set_cmd(:input => StringIO.new('specs')).should == "-"
@@ -91,6 +89,53 @@ describe PdftkForms::Call do
       end
     end
 
+    context "build_range_option" do
+      before do
+        @pdftk = PdftkForms::Call.new
+      end
+
+      it "should set the operation with arguments" do
+        cat_options = {
+          :input => {'a.pdf' => nil, 'b.pdf' => nil, 'c.pdf' => nil},
+          :operation => {
+            :cat => [
+              {:start => 1, :end => 'end', :pdf => 'a.pdf'},
+              {:pdf => 'b.pdf', :start => 12, :end => 16, :orientation => 'E', :pages => 'even'}
+            ]
+          }
+        }
+        cmd = @pdftk.set_cmd(cat_options)
+        input_pdfs = cmd.split(' cat ').first
+        input_map = map_inputs(input_pdfs)
+        cmd.should == "#{input_pdfs} cat #{input_map['a.pdf']}1-end #{input_map['b.pdf']}12-16evenE"
+        
+        @pdftk.set_cmd(:input => {'a.pdf' => nil}, :operation => {:cat => [{:pdf => 'a.pdf', :start => 1, :end => 'end'}]}).should == "B=a.pdf cat B1-end"
+        @pdftk.set_cmd(:input => {'a.pdf' => nil}, :operation => {:cat => [{:pdf => 'a.pdf'}]}).should == "B=a.pdf cat B"
+        
+        cat_options = {:input => {'a.pdf' => nil, 'b.pdf' => nil}, :operation => {:cat => [{:pdf => 'a.pdf'}, {:pdf => 'b.pdf'}]}}
+        cmd = @pdftk.set_cmd(cat_options)
+        input_pdfs = cmd.split(' cat ').first
+        input_map = map_inputs(input_pdfs)
+        cmd.should == "#{input_pdfs} cat #{input_map['a.pdf']} #{input_map['b.pdf']}"
+        
+        @pdftk.set_cmd(:input => 'a.pdf', :operation => {:cat => [{:pdf => 'a.pdf', :start => 1, :end => 'end'}]}).should == "a.pdf cat 1-end"
+        @pdftk.set_cmd(:input => 'a.pdf', :operation => {:cat => [{:pdf => 'a.pdf', :end => 'end'}]}).should == "a.pdf cat 1-end"
+        @pdftk.set_cmd(:input => 'a.pdf', :operation => {:cat => [{:pdf => 'a.pdf', :start => '4', :orientation => 'N'}]}).should == "a.pdf cat 4N"
+      end
+
+      it "should raise missing input errors" do
+        expect { @pdftk.set_cmd(:input => {'a.pdf' => nil}, :operation => {:cat => [{:pdf => 'a.pdf'}, {:pdf => 'b.pdf'}]}) }.to raise_error(PdftkForms::MissingInput)
+        expect { @pdftk.set_cmd(:input => 'a.pdf', :operation => {:cat => [{:pdf => 'a.pdf'}, {:pdf => 'b.pdf'}]}) }.to raise_error(PdftkForms::MissingInput)
+        expect { @pdftk.set_cmd(:input => {'a.pdf' => nil, 'c.pdf' => 'foo'}, :operation => {:cat => [{:pdf => 'a.pdf'}, {:pdf => 'b.pdf'}]}) }.to raise_error(PdftkForms::MissingInput, "Missing Input file, `b.pdf`")
+      end
+      
+      it "should raise an invalid options error" do
+        expect { @pdftk.set_cmd(:input => {'a.pdf' => nil}, :operation => {:cat => nil}) }.to raise_error(PdftkForms::InvalidOptions, "Invalid options passed to the command, `cat`, please see `$: pdftk --help`")
+        expect { @pdftk.set_cmd(:input => {'a.pdf' => nil}, :operation => {:cat => []}) }.to raise_error(PdftkForms::InvalidOptions, "Invalid options passed to the command, `cat`, please see `$: pdftk --help`")
+        expect { @pdftk.set_cmd(:input => {'a.pdf' => nil}, :operation => {:cat => "test"}) }.to raise_error(PdftkForms::InvalidOptions, "Invalid options passed to the command, `cat`, please see `$: pdftk --help`")
+      end
+    end
+
     context "build command" do
       before do
         @pdftk = PdftkForms::Call.new(:input => 'test.pdf', :options => {:flatten => true})
@@ -108,8 +153,12 @@ describe PdftkForms::Call do
         expect{ @pdftk.set_cmd(:input => Tempfile.new('specs'), :operation => {:fill_form => StringIO.new('')}) }.to raise_error(PdftkForms::MultipleInputStream)
       end
 
+      # Give up in testing this one
+      # What is the point in testing a simple concatenation....
       it "should prepare a full command line" do
-#        @pdftk.set_cmd(:input => {'a.pdf' => 'foo', 'b.pdf' => 'bar', 'c.pdf' => nil}, :operation => {:fill_form => 'a.fdf'}, :output => 'out.pdf',:options => { :flatten => false, :owner_pw => 'bar', :user_pw => 'baz', :encrypt  => :'40bit'}).split('').sort.should == "B=c.pdf C=a.pdf D=b.pdf input_pw C=foo D=bar fill_form a.fdf output out.pdf encrypt_40bit owner_pw bar user_pw baz".split('').sort
+#        inputs = {'a.pdf' => 'foo', 'b.pdf' => 'bar', 'c.pdf' => nil}
+#        command = @pdftk.set_cmd(:input => inputs, :operation => {:fill_form => 'a.fdf'}, :output => 'out.pdf',:options => { :flatten => false, :owner_pw => 'bar', :user_pw => 'baz', :encrypt  => :'40bit'}).split('').sort.should == "B=c.pdf C=a.pdf D=b.pdf input_pw C=foo D=bar fill_form a.fdf output out.pdf encrypt_40bit owner_pw bar user_pw baz".split('').sort
+#        reconstruct_inputs(command).should == inputs
       end
     end
   end
@@ -120,7 +169,6 @@ describe PdftkForms::Call do
       @file = File.new path_to_pdf('fields.pdf')
       @tempfile = Tempfile.new 'specs'
       @stringio = StringIO.new
-
       @file_as_string = @file.read
       @file.rewind
     end
@@ -162,4 +210,3 @@ describe PdftkForms::Call do
     end
   end
 end
-
